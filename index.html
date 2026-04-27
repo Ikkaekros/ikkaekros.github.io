@@ -499,13 +499,17 @@
     .summary-box {
       background: var(--table-bg);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 12px;
-      box-shadow: inset 0 0 12px rgba(0, 245, 255, 0.08);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: inset 0 0 8px rgba(0, 245, 255, 0.08);
     }
 
     .summary-box span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.7px; }
-    .summary-box strong { font-size: 18px; color: var(--green); text-shadow: 0 0 8px rgba(34, 255, 136, 0.35); }
+    .summary-box strong {
+      font-size: 16px;
+      color: var(--green);
+      text-shadow: 0 0 6px rgba(34, 255, 136, 0.35);
+    }
 
     canvas {
       background: transparent;
@@ -577,6 +581,13 @@
 
     @media (max-width: 700px) {
       body { padding: 12px; }
+      h1 { font-size: 24px; }
+      .chart-tabs, .summary { grid-template-columns: 1fr; }
+      .filters { grid-template-columns: 1fr 1fr; } /* mantener en una línea */
+      table { font-size: 12px; }
+      th, td { padding: 8px; }
+      td button { margin-bottom: 6px; }
+    }
       h1 { font-size: 24px; }
       .chart-tabs, .summary, .filters { grid-template-columns: 1fr; }
       table { font-size: 12px; }
@@ -1008,7 +1019,25 @@
       playSwitchSound();
     }
 
-    function renderSummary() { const totals = getTotals(); elements.incomeTotal.textContent = formatMoney(totals.income); elements.expenseTotal.textContent = formatMoney(totals.expense); elements.balanceTotal.textContent = formatMoney(totals.balance); }
+    function renderSummary() {
+      const totals = getTotals();
+
+      elements.incomeTotal.textContent = formatMoney(totals.income);
+      elements.expenseTotal.textContent = formatMoney(totals.expense);
+      elements.balanceTotal.textContent = formatMoney(totals.balance);
+
+      const boxes = document.querySelectorAll('.summary-box');
+      boxes.forEach(box => box.classList.remove('hidden'));
+
+      if (mode === 'income') {
+        boxes[1].classList.add('hidden'); // gastos
+        boxes[2].classList.add('hidden'); // balance
+      } else if (mode === 'expense') {
+        boxes[0].classList.add('hidden'); // ganancias
+        boxes[2].classList.add('hidden'); // balance
+      }
+      // balance muestra todo
+    }
 
     function renderTable() {
       const visibleRecords = getVisibleRecords();
@@ -1027,9 +1056,89 @@
 
     const glowPlugin = { id: 'glowPlugin', beforeDatasetDraw(chart) { const theme = getActiveTheme(); const { ctx } = chart; ctx.save(); ctx.shadowColor = theme === 'monster-zero' ? 'rgba(56,189,248,0.45)' : 'rgba(0, 245, 255, 0.6)'; ctx.shadowBlur = theme === 'basic' ? 0 : 20; }, afterDatasetDraw(chart) { chart.ctx.restore(); } };
 
-    function animateValue(target) { const start = animatedValue || 0; const duration = 400; const startTime = performance.now(); function update(now) { const progress = Math.min((now - startTime) / duration, 1); animatedValue = start + (target - start) * progress; if (progress < 1) requestAnimationFrame(update); } requestAnimationFrame(update); }
+    function animateValue(target) {
+      const start = 0;
+      const duration = 700;
+      const startTime = performance.now();
 
-    const centerTextPlugin = { id: 'centerTextPlugin', afterDraw(chart) { const { ctx, chartArea } = chart; if (!chartArea) return; const centerX = (chartArea.left + chartArea.right) / 2; const centerY = (chartArea.top + chartArea.bottom) / 2; const totals = getTotals(); const value = mode === 'balance' ? totals.balance : mode === 'income' ? totals.income : totals.expense; const color = mode === 'balance' ? (value >= 0 ? '#22ff88' : '#ff3b5c') : mode === 'income' ? '#22ff88' : '#ff3b5c'; animateValue(value); ctx.save(); ctx.font = 'bold 20px Arial'; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = color; ctx.shadowBlur = 14; ctx.fillText(formatMoney(animatedValue), centerX, centerY); ctx.restore(); } };
+      function update(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        animatedValue = start + (target - start) * eased;
+
+        if (progress < 1) {
+          requestAnimationFrame(update);
+        } else {
+          animatedValue = target;
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    const centerTextPlugin = {
+      id: 'centerTextPlugin',
+      afterDraw(chart) {
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return;
+
+        const centerX = (chartArea.left + chartArea.right) / 2;
+        const centerY = (chartArea.top + chartArea.bottom) / 2;
+        const totals = getTotals();
+        const value = mode === 'balance' ? totals.balance : mode === 'income' ? totals.income : totals.expense;
+
+        let color;
+        if (mode === 'balance') color = value >= 0 ? '#22ff88' : '#ff3b5c';
+        else if (mode === 'income') color = '#22ff88';
+        else color = '#ff3b5c';
+
+        animateValue(value);
+
+        const displayText = formatMoney(animatedValue);
+        const activeTheme = getActiveTheme();
+
+        ctx.save();
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (mode === 'balance' && value < 0) {
+          const shake = Math.sin(Date.now() / 50) * 1.5;
+          ctx.translate(shake, 0);
+        }
+
+        if (activeTheme === 'cyberpunk') {
+          ctx.globalAlpha = 0.96;
+
+          ctx.shadowColor = '#00f5ff';
+          ctx.shadowBlur = 24;
+          ctx.fillStyle = '#00f5ff';
+          ctx.fillText(displayText, centerX + 1.2, centerY);
+
+          ctx.shadowColor = '#ff2bd6';
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = '#ff2bd6';
+          ctx.fillText(displayText, centerX - 1.2, centerY);
+
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = color;
+          ctx.fillText(displayText, centerX, centerY);
+
+          const scanOffset = Math.sin(Date.now() / 190) * 2;
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          ctx.fillText(displayText, centerX, centerY + scanOffset);
+        } else {
+          ctx.fillStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 16;
+          ctx.fillText(displayText, centerX, centerY);
+        }
+
+        ctx.restore();
+      }
+    };
 
     function renderChart() {
       if (chartInstance && typeof chartInstance.destroy === 'function') chartInstance.destroy();
