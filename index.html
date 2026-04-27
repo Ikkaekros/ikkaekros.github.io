@@ -719,6 +719,13 @@
 
       <canvas id="chart"></canvas>
 
+      <button id="toggleSummaryBtn" class="records-toggle hidden" type="button">Ver resumen</button>
+
+      <div id="summaryPanel" class="records-panel">
+        <h2>Resumen</h2>
+        <div id="achievementList" class="summary-box"></div>
+      </div>
+
       <button id="toggleRecordsBtn" class="records-toggle" type="button">Ver registros</button>
 
       <div id="recordsPanel" class="records-panel">
@@ -779,6 +786,7 @@
     let sharedAudioContext = null;
     let achievements = safeLoadAchievements();
     let recordsVisible = false;
+    let summaryVisible = false;
 
     const $ = (id) => document.getElementById(id);
     const elements = {
@@ -786,7 +794,7 @@
       typeInput: $('type'), amountInput: $('amount'), originInput: $('origin'), categoryInput: $('category'), otherInput: $('other'), dateInput: $('date'), startDateInput: $('startDate'), endDateInput: $('endDate'),
       amountBox: $('amountBox'), incomeBox: $('incomeBox'), expenseBox: $('expenseBox'), otherBox: $('otherBox'), dateBox: $('dateBox'), saveBtn: $('saveBtn'), cancelEditBtn: $('cancelEditBtn'),
       btnIncome: $('btnIncome'), btnExpense: $('btnExpense'), btnBalance: $('btnBalance'), clearBtn: $('clearBtn'), chartCanvas: $('chart'), incomeTotal: $('incomeTotal'), expenseTotal: $('expenseTotal'), balanceTotal: $('balanceTotal'),
-      recordsTable: $('recordsTable'), recordsPanel: $('recordsPanel'), toggleRecordsBtn: $('toggleRecordsBtn'), settingsBtn: $('settingsBtn'), settingsModal: $('settingsModal'), closeSettingsBtn: $('closeSettingsBtn'), downloadExcelBtn: $('downloadExcelBtn'), themeSelect: $('themeSelect')
+      recordsTable: $('recordsTable'), recordsPanel: $('recordsPanel'), toggleRecordsBtn: $('toggleRecordsBtn'), summaryPanel: $('summaryPanel'), toggleSummaryBtn: $('toggleSummaryBtn'), achievementList: $('achievementList'), settingsBtn: $('settingsBtn'), settingsModal: $('settingsModal'), closeSettingsBtn: $('closeSettingsBtn'), downloadExcelBtn: $('downloadExcelBtn'), themeSelect: $('themeSelect')
     };
 
     function init() {
@@ -816,6 +824,7 @@
       elements.downloadExcelBtn.addEventListener('click', downloadExcel);
       elements.themeSelect.addEventListener('change', () => setTheme(elements.themeSelect.value));
       elements.toggleRecordsBtn.addEventListener('click', toggleRecords);
+      elements.toggleSummaryBtn.addEventListener('click', toggleSummary);
       elements.settingsModal.addEventListener('click', (event) => { if (event.target === elements.settingsModal) closeSettings(); });
       elements.recordsTable.addEventListener('click', (event) => {
         const editButton = event.target.closest('[data-edit-id]');
@@ -951,17 +960,38 @@
     function changeChartMode(nextMode, activeButton) {
       mode = nextMode;
       recordsVisible = false;
+      summaryVisible = false;
       updateRecordsPanel();
+      updateSummaryPanel();
       playSwitchSound();
       [elements.btnIncome, elements.btnExpense, elements.btnBalance].forEach((button) => button.classList.remove('active'));
       activeButton.classList.add('active');
       render();
     }
 
-    function toggleRecords() { recordsVisible = !recordsVisible; updateRecordsPanel(); playSwitchSound(); }
+    function toggleRecords() {
+      recordsVisible = !recordsVisible;
+      updateRecordsPanel();
+      playSwitchSound();
+    }
+
     function updateRecordsPanel() {
       elements.recordsPanel.classList.toggle('open', recordsVisible);
       elements.toggleRecordsBtn.textContent = recordsVisible ? 'Ocultar registros' : 'Ver registros';
+    }
+
+    function toggleSummary() {
+      summaryVisible = !summaryVisible;
+      updateSummaryPanel();
+      playSwitchSound();
+    }
+
+    function updateSummaryPanel() {
+      const showSummaryButton = mode === 'balance';
+      elements.toggleSummaryBtn.classList.toggle('hidden', !showSummaryButton);
+      elements.summaryPanel.classList.toggle('open', showSummaryButton && summaryVisible);
+      elements.toggleSummaryBtn.textContent = summaryVisible ? 'Ocultar resumen' : 'Ver resumen';
+      renderAchievementSummary();
     }
 
     function clearRecords() {
@@ -1092,9 +1122,8 @@
         else if (mode === 'income') color = '#22ff88';
         else color = '#ff3b5c';
 
-        animateValue(value);
-
-        const displayText = formatMoney(animatedValue);
+        // FIX: mostrar siempre el valor real. La animación anterior no redibujaba el canvas en cada frame.
+        const displayText = formatMoney(value);
         const activeTheme = getActiveTheme();
 
         ctx.save();
@@ -1186,15 +1215,50 @@
     function animateTotals() { [elements.incomeTotal, elements.expenseTotal, elements.balanceTotal].forEach((el) => { el.classList.add('animate'); setTimeout(() => el.classList.remove('animate'), 300); }); }
 
     function checkAchievements() { const totals = getTotals(); if (totals.balance > 0 && !achievements.includes('positive')) unlockAchievement('positive', '🏆 Logro: Balance positivo'); if (records.length >= 5 && !achievements.includes('starter')) unlockAchievement('starter', '🚀 Logro: 5 registros completados'); const impulse = records.filter((r) => r.category === 'Gastos no planeados'); if (impulse.length === 0 && records.length >= 3 && !achievements.includes('disciplined')) unlockAchievement('disciplined', '🧠 Logro: Sin gastos impulsivos'); }
-    function unlockAchievement(id, message) { achievements.push(id); saveAchievements(); alert(message); }
+    function unlockAchievement(id, message) {
+      achievements.push(id);
+      saveAchievements();
+      renderAchievementSummary();
+    }
 
-    function render() { renderSummary(); renderTable(); updateRecordsPanel(); if (mainTab === 'charts') renderChart(); }
+    function renderAchievementSummary() {
+      if (!elements.achievementList) return;
+
+      const totals = getTotals();
+      const achievementLabels = {
+        positive: '🏆 Balance positivo',
+        starter: '🚀 5 registros completados',
+        disciplined: '🧠 Sin gastos impulsivos'
+      };
+
+      const unlocked = achievements.map((id) => achievementLabels[id]).filter(Boolean);
+      const achievementHTML = unlocked.length
+        ? unlocked.map((item) => `<p>${item}</p>`).join('')
+        : '<p>Aún no hay logros desbloqueados.</p>';
+
+      elements.achievementList.innerHTML = `
+        <p><strong>Ganancias:</strong> ${formatMoney(totals.income)}</p>
+        <p><strong>Gastos:</strong> ${formatMoney(totals.expense)}</p>
+        <p><strong>Balance:</strong> ${formatMoney(totals.balance)}</p>
+        <hr style="border-color: var(--border); opacity: 0.5;">
+        ${achievementHTML}
+      `;
+    }
+
+    function render() {
+      renderSummary();
+      renderTable();
+      updateRecordsPanel();
+      updateSummaryPanel();
+      if (mainTab === 'charts') renderChart();
+    }
 
     function runTests() {
       const originalRecords = records;
       const originalMode = mode;
       const originalTheme = getActiveTheme();
       const originalRecordsVisible = recordsVisible;
+      const originalSummaryVisible = summaryVisible;
       records = [{ id: '1', type: 'income', amount: 100, origin: 'Trabajo', date: '2026-04-01' }, { id: '2', type: 'expense', amount: 40, category: 'Despensa', date: '2026-04-03' }];
       mode = 'balance'; console.assert(getTotals(records).balance === 60, 'Balance debe ser 60');
       mode = 'income'; console.assert(getVisibleRecords().every((record) => record.type === 'income'), 'Ganancias solo muestra ganancias');
@@ -1204,7 +1268,8 @@
       console.assert(THEMES.includes('pixel'), 'El tema Pixel Mode debe existir');
       console.assert(THEMES.includes('pacman'), 'El tema Pac-Man Mode debe existir');
       recordsVisible = false; updateRecordsPanel(); console.assert(!elements.recordsPanel.classList.contains('open'), 'Registros debe iniciar oculto');
-      records = originalRecords; mode = originalMode; recordsVisible = originalRecordsVisible; localStorage.setItem(THEME_KEY, originalTheme);
+      mode = 'balance'; summaryVisible = true; updateSummaryPanel(); console.assert(!elements.toggleSummaryBtn.classList.contains('hidden'), 'Resumen debe estar disponible en Balance');
+      records = originalRecords; mode = originalMode; recordsVisible = originalRecordsVisible; summaryVisible = originalSummaryVisible; localStorage.setItem(THEME_KEY, originalTheme);
     }
 
     init();
