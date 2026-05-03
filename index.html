@@ -351,7 +351,26 @@
     .main-tabs { grid-template-columns: 1fr 1fr; }
     .chart-tabs { grid-template-columns: repeat(3, 1fr); }
     .summary { grid-template-columns: repeat(3, 1fr); }
-    .filters { grid-template-columns: 1fr 1fr; }
+    .filters {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: end;
+      gap: 10px;
+    }
+
+    .filters > div {
+      min-width: 0;
+    }
+
+    .filters input[type="date"] {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      height: 48px;
+      padding: 8px 10px;
+      font-size: 13px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
 
     button {
       width: 100%;
@@ -583,7 +602,19 @@
       body { padding: 12px; }
       h1 { font-size: 24px; }
       .chart-tabs, .summary { grid-template-columns: 1fr; }
-      .filters { grid-template-columns: 1fr 1fr; } /* mantener en una línea */
+      .filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .filters label {
+        font-size: 11px;
+        letter-spacing: 0.4px;
+      }
+      .filters input[type="date"] {
+        height: 44px;
+        padding: 6px 8px;
+        font-size: 12px;
+      }
       table { font-size: 12px; }
       th, td { padding: 8px; }
       td button { margin-bottom: 6px; }
